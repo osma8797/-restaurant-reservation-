@@ -20,6 +20,7 @@ db.exec(`
     customerName TEXT NOT NULL,
     orderType TEXT NOT NULL,
     phoneNumber TEXT NOT NULL,
+    itemsJson TEXT,
     status TEXT NOT NULL DEFAULT 'new',
     createdAt TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -28,3 +29,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);
 `);
 
+// Migration for older DBs: add itemsJson if missing
+try {
+  const cols = db.prepare("PRAGMA table_info('reservations')").all();
+  const hasItemsJson = cols.some((c) => c.name === 'itemsJson');
+  if (!hasItemsJson) {
+    db.exec('ALTER TABLE reservations ADD COLUMN itemsJson TEXT');
+  }
+} catch {
+  // ignore
+}
