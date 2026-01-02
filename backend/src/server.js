@@ -23,7 +23,7 @@ function normalizePhone(phone) {
 
 // ---- API
 app.post('/api/reservations', (req, res) => {
-  const { customerName, orderType, phoneNumber } = req.body || {};
+  const { customerName, orderType, phoneNumber, items } = req.body || {};
 
   if (!isNonEmptyString(customerName) || !isNonEmptyString(orderType) || !isNonEmptyString(phoneNumber)) {
     return res.status(400).json({
@@ -32,14 +32,28 @@ app.post('/api/reservations', (req, res) => {
     });
   }
 
+  // items: optional array of {name, price}
+  let itemsJson = null;
+  if (Array.isArray(items)) {
+    const safeItems = items
+      .filter((it) => it && typeof it === 'object')
+      .map((it) => ({
+        name: String(it.name ?? '').trim(),
+        price: Number(it.price ?? 0)
+      }))
+      .filter((it) => it.name.length > 0);
+
+    if (safeItems.length) itemsJson = JSON.stringify(safeItems);
+  }
+
   const phone = normalizePhone(phoneNumber);
 
   const stmt = db.prepare(
-    `INSERT INTO reservations (customerName, orderType, phoneNumber)
-     VALUES (?, ?, ?)`
+    `INSERT INTO reservations (customerName, orderType, phoneNumber, itemsJson)
+     VALUES (?, ?, ?, ?)`
   );
 
-  const info = stmt.run(customerName.trim(), orderType.trim(), phone);
+  const info = stmt.run(customerName.trim(), orderType.trim(), phone, itemsJson);
   const row = db.prepare('SELECT * FROM reservations WHERE id = ?').get(info.lastInsertRowid);
 
   return res.status(201).json({ ok: true, reservation: row });
