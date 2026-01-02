@@ -15,56 +15,64 @@
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); }
     header { background: var(--primary); color: #fff; padding: 14px 18px; }
-    .wrap { max-width: 1100px; margin: 18px auto; padding: 0 14px; }
-    .toolbar { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: 1fr 170px 140px; gap: 10px; align-items: center; }
+    .wrap { max-width: 1200px; margin: 18px auto; padding: 0 14px; }
+    .toolbar { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: grid; grid-template-columns: 1fr 220px 140px; gap: 10px; align-items: center; }
     input, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
     button { padding: 10px 12px; border: 0; border-radius: 8px; background: var(--primary); color: #fff; cursor: pointer; }
     button.secondary { background: #333; }
+
     table { width: 100%; border-collapse: collapse; margin-top: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
     th { background: rgba(123,27,27,.08); text-align: right; }
     tr:last-child td { border-bottom: 0; }
+
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .pill { padding: 4px 8px; border-radius: 999px; font-size: 12px; display: inline-block; border: 1px solid var(--border); }
     .status-new { background: #fff; }
     .status-confirmed { background: #e8f5e9; }
     .status-done { background: #e3f2fd; }
     .status-canceled { background: #ffebee; }
+
+    .items { margin: 0; padding-right: 18px; }
+    .items li { margin: 2px 0; }
     .muted { color: rgba(0,0,0,.6); font-size: 12px; }
-    @media (max-width: 820px) {
+
+    @media (max-width: 920px) {
       .toolbar { grid-template-columns: 1fr; }
+      th:nth-child(4), td:nth-child(4) { display: none; } /* إخفاء الهاتف على الشاشات الصغيرة */
     }
   </style>
 </head>
 <body>
   <header>
-    <strong>لوحة التحكم</strong> — إدارة الحجوزات/الطلبات
+    <strong>لوحة التحكم</strong> — الطلبات والحجوزات
   </header>
 
   <div class="wrap">
     <div class="toolbar">
-      <input id="q" placeholder="بحث بالاسم/الهاتف/نوع الطلب…" />
-      <select id="status">
+      <input id="q" placeholder="بحث بالاسم/الهاتف/نوع الطلب…" aria-label="بحث" />
+      <select id="status" aria-label="فلتر الحالة">
         <option value="">كل الحالات</option>
         <option value="new">جديد</option>
-        <option value="confirmed">مؤكد</option>
+        <option value="confirmed">تم قبول الطلب</option>
         <option value="done">مكتمل</option>
         <option value="canceled">ملغي</option>
       </select>
       <button id="refresh">تحديث</button>
     </div>
 
-    <div class="muted" style="margin-top:10px;">ملاحظة: هذه لوحة بسيطة بدون تسجيل دخول. إذا تبيها بكلمة مرور علمني وبركبها.</div>
+    <div class="muted" style="margin-top:10px;">ملاحظة: الداشبورد بدون تسجيل دخول. (ننصح بإضافة كلمة مرور قبل النشر.)</div>
 
     <table>
       <thead>
         <tr>
           <th>#</th>
-          <th>الاسم</th>
+          <th>اسم العميل</th>
           <th>نوع الطلب</th>
           <th>الهاتف</th>
+          <th>تفاصيل الطلب</th>
           <th>الحالة</th>
-          <th>التاريخ</th>
+          <th>وقت الطلب</th>
           <th>إجراءات</th>
         </tr>
       </thead>
@@ -78,11 +86,37 @@
     function statusLabel(s) {
       switch (s) {
         case 'new': return 'جديد';
-        case 'confirmed': return 'مؤكد';
+        case 'confirmed': return 'تم قبول الطلب';
         case 'done': return 'مكتمل';
         case 'canceled': return 'ملغي';
         default: return s;
       }
+    }
+
+    function formatDateTime(s) {
+      // DB stores: YYYY-MM-DD HH:mm:ss (UTC-ish). We'll show as-is.
+      return String(s || '');
+    }
+
+    function parseItems(itemsJson) {
+      if (!itemsJson) return [];
+      try {
+        const x = JSON.parse(itemsJson);
+        if (!Array.isArray(x)) return [];
+        return x.filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+
+    function itemsHtml(items) {
+      if (!items || !items.length) return '<span class="muted">—</span>';
+      const lis = items.map((it) => {
+        const name = escapeHtml(it.name);
+        const price = Number(it.price || 0);
+        return `<li>${name}${price ? ` — ${escapeHtml(price)} ريال` : ''}</li>`;
+      }).join('');
+      return `<ul class="items">${lis}</ul>`;
     }
 
     async function fetchReservations() {
@@ -116,19 +150,21 @@
 
     function rowTemplate(r) {
       const statusClass = `pill status-${r.status}`;
+      const items = parseItems(r.itemsJson);
       return `
         <tr>
           <td>${r.id}</td>
           <td>${escapeHtml(r.customerName)}</td>
           <td>${escapeHtml(r.orderType)}</td>
           <td>${escapeHtml(r.phoneNumber)}</td>
+          <td>${itemsHtml(items)}</td>
           <td><span class="${statusClass}">${statusLabel(r.status)}</span></td>
-          <td>${escapeHtml(r.createdAt)}</td>
+          <td>${escapeHtml(formatDateTime(r.createdAt))}</td>
           <td>
             <div class="actions">
-              <select data-action="status" data-id="${r.id}">
+              <select data-action="status" data-id="${r.id}" aria-label="تغيير الحالة">
                 <option value="new" ${r.status==='new'?'selected':''}>جديد</option>
-                <option value="confirmed" ${r.status==='confirmed'?'selected':''}>مؤكد</option>
+                <option value="confirmed" ${r.status==='confirmed'?'selected':''}>تم قبول الطلب</option>
                 <option value="done" ${r.status==='done'?'selected':''}>مكتمل</option>
                 <option value="canceled" ${r.status==='canceled'?'selected':''}>ملغي</option>
               </select>
@@ -150,16 +186,16 @@
 
     async function render() {
       const tbody = document.getElementById('rows');
-      tbody.innerHTML = '<tr><td colspan="7">جاري التحميل…</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">جاري التحميل…</td></tr>';
       try {
         const rows = await fetchReservations();
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="7">لا يوجد بيانات.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8">لا يوجد بيانات.</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(rowTemplate).join('');
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="7">خطأ: ${escapeHtml(e.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8">خطأ: ${escapeHtml(e.message)}</td></tr>`;
       }
     }
 
