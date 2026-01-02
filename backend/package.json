@@ -1,0 +1,16 @@
+{
+  "name": "osama-wep-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.2",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0"
+  }
+}
+
